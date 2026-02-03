@@ -355,7 +355,7 @@ with st.sidebar:
     
     if logo_exists:
         try:
-            st.image(logo_path, use_container_width=True)
+            st.image(logo_path)
         except Exception as e:
             st.warning(f"Could not load logo: {e}")
             logo_exists = False
