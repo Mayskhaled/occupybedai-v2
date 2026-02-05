@@ -387,7 +387,6 @@ with st.sidebar:
         "Live Admissions", 
         "ML Predictions",  # New: ML features
         "Bed Forecast",    # New: ML feature
-        "Discharge Planning", # New: ML feature
         "Operational Analytics", 
         "Settings"
     ], label_visibility="collapsed")
@@ -768,99 +767,6 @@ elif menu == "Bed Forecast":
         st.plotly_chart(fig_rate, use_container_width=True)
     else:
         st.info("No data available for bed forecast. Please check your data files.")
-
-# ---------------------------------------------------------
-# 8. DISCHARGE PLANNING (from app functionality.py)
-# ---------------------------------------------------------
-elif menu == "Discharge Planning":
-    st.title("📋 Discharge Planning & Predictions")
-    
-    if not data_loaded or df_eicu is None:
-        st.error("❌ Data not loaded. Using sample data for demonstration.")
-        df_eicu, data_loaded = load_eicu_data()
-    
-    st.markdown('<div class="section-header">Patient Discharge Schedule</div>', unsafe_allow_html=True)
-    
-    if df_eicu is not None and len(df_eicu) > 0:
-        # Prepare data
-        sample_size = min(150, len(df_eicu))
-        df_discharge = df_eicu.sample(sample_size).copy()
-        
-        try:
-            df_discharge['predicted_los_hours'] = df_discharge.apply(
-                lambda row: predict_los_for_patient(row.to_dict(), model, scaler, le_dict, feature_cols),
-                axis=1
-            )
-        except:
-            df_discharge['predicted_los_hours'] = np.random.uniform(24, 168, len(df_discharge))
-        
-        np.random.seed(42)
-        df_discharge['admission_time'] = CURRENT_DATE - pd.to_timedelta(
-            np.random.uniform(1, 25, len(df_discharge)), unit='d'
-        )
-        df_discharge['predicted_discharge_time'] = (
-            df_discharge['admission_time'] + 
-            pd.to_timedelta(df_discharge['predicted_los_hours'], unit='h')
-        )
-        
-        # Filter active patients
-        active_discharge = df_discharge[df_discharge['predicted_discharge_time'] > CURRENT_DATE].copy()
-        active_discharge['hours_remaining'] = (
-            (active_discharge['predicted_discharge_time'] - CURRENT_DATE).dt.total_seconds() / 3600
-        )
-        
-        # Group by discharge window
-        col1, col2, col3 = st.columns(3)
-        
-        next_24h = len(active_discharge[active_discharge['hours_remaining'] <= 24])
-        next_48h = len(active_discharge[active_discharge['hours_remaining'] <= 48])
-        next_7d = len(active_discharge[active_discharge['hours_remaining'] <= 168])
-        
-        with col1:
-            st.markdown(f"""<div class="kpi-card"><div class="kpi-label">Next 24 Hours</div><div class="kpi-val" style="color:#FF6B6B">{next_24h}</div></div>""", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""<div class="kpi-card"><div class="kpi-label">Next 48 Hours</div><div class="kpi-val" style="color:#FFD43B">{next_48h}</div></div>""", unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"""<div class="kpi-card"><div class="kpi-label">Next 7 Days</div><div class="kpi-val" style="color:#51CF66">{next_7d}</div></div>""", unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown('<div class="section-header">🚨 URGENT: Discharging in Next 24 Hours</div>', unsafe_allow_html=True)
-        
-        urgent = active_discharge[active_discharge['hours_remaining'] <= 24].sort_values('hours_remaining')
-        
-        if not urgent.empty:
-            for idx, (_, patient) in enumerate(urgent.head(10).iterrows(), 1):
-                hours = patient['hours_remaining']
-                discharge_time = patient['predicted_discharge_time'].strftime('%H:%M')
-                
-                if hours < 4:
-                    badge_color = "bg-crit"
-                    status = "IMMINENT"
-                elif hours < 12:
-                    badge_color = "bg-warn"
-                    status = "SOON"
-                else:
-                    badge_color = "bg-safe"
-                    status = "PLANNED"
-                
-                st.markdown(f"""
-                <div class="dept-card">
-                    <div class="dept-header">
-                        <span class="dept-title">Patient #{idx}</span>
-                        <span class="badge {badge_color}">{status}</span>
-                    </div>
-                    <div style="font-size:12px; color:#8B949E; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                        <div><b>Discharge:</b> {discharge_time}</div>
-                        <div><b>Hours Left:</b> {hours:.1f}h</div>
-                        <div><b>Predicted LOS:</b> {patient['predicted_los_hours']:.1f}h</div>
-                        <div><b>Admitted:</b> {patient['admission_time'].strftime('%H:%M')}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("No urgent discharges in the next 24 hours.")
-    else:
-        st.info("No data available for discharge planning. Please check your data files.")
 
 # ---------------------------------------------------------
 # 9. LIVE ADMISSIONS (Design from app design.py with ML tab)
